@@ -1,0 +1,135 @@
+# Local lakehouse + data API.
+# All images below publish linux/amd64 AND linux/arm64 manifests, so the same file
+# runs on an x86 laptop and on an OCI Ampere A1 (Arm) VM.
+name: data-lake-api
+
+x-s3-env: &s3-env
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+  AWS_REGION: us-east-1
+
+services:
+  minio:
+    # MinIO stopped publishing free images on Docker Hub/Quay (late 2025 / 2026).
+    # PGSTY Silo is a maintained MinIO fork: same S3 API, MINIO_* env vars, console and `mc`.
+    image: pgsty/silo:RELEASE.2026-11-12T00-00-00Z   # amd64 + arm64
+    command: ["silo", "server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [minio-data:/data]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 512m
+    restart: unless-stopped
+
+  minio-init:
+    image: pgsty/silo:RELEASE.2026-11-12T00-00-00Z   # bundles the `mc` client
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/${WAREHOUSE_BUCKET:-warehouse} &&
+      mc mb --ignore-existing local/${EXPORTS_BUCKET:-exports} &&
+      (mc ilm rule add --expire-days 1 local/${EXPORTS_BUCKET:-exports} || echo 'ilm rule skipped')"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    restart: "no"
+
+  iceberg-rest:
+    image: apache/iceberg-rest-fixture:latest   # amd64 + arm64; reference REST catalog
+    depends_on:
+      minio-init: { condition: service_completed_successfully }
+    environment:
+      <<: *s3-env
+      CATALOG_WAREHOUSE: s3://${WAREHOUSE_BUCKET:-warehouse}/
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+      # persist catalog metadata pointers on a volume (default is in-memory)
+      CATALOG_URI: jdbc:sqlite:/catalog/iceberg_catalog.db
+      CATALOG_JDBC_USER: user
+      CATALOG_JDBC_PASSWORD: password
+    user: root
+    volumes: [catalog-data:/catalog]
+    ports: ["8181:8181"]
+    mem_limit: 768m
+    restart: unless-stopped
+
+  trino:
+    image: trinodb/trino:484             # amd64 + arm64
+    depends_on: [iceberg-rest]
+    environment:
+      <<: *s3-env
+    volumes:
+      - ./trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties:ro
+      - ./trino/etc/config.properties:/etc/trino/config.properties:ro
+      # explicit 1.5 GB heap; container limit leaves ~1.5 GB for metaspace, code cache, direct buffers
+      - ./trino/etc/jvm.config:/etc/trino/jvm.config:ro
+    ports: ["8080:8080"]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "[[ \"$$(curl -sf http://localhost:8080/v1/info)\" == *'\"starting\":false'* ]]"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    mem_limit: 3g
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine                # amd64 + arm64
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    ports: ["6379:6379"]
+    mem_limit: 192m
+    restart: unless-stopped
+
+  api:
+    build: ./api                         # python:3.12-slim base, amd64 + arm64
+    depends_on:
+      trino: { condition: service_healthy }
+      redis: { condition: service_started }
+    environment:
+      <<: *s3-env
+      TRINO_HOST: trino
+      TRINO_PORT: "8080"
+      TRINO_CATALOG: iceberg
+      TRINO_SCHEMA: payments
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+      EXPORTS_BUCKET: ${EXPORTS_BUCKET:-exports}
+      API_KEYS: ${API_KEYS:-dev-analyst-key:analyst,dev-admin-key:admin}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
+      ICEBERG_REST_URI: http://iceberg-rest:8181
+      WAREHOUSE: s3://${WAREHOUSE_BUCKET:-warehouse}/
+      AUDIT_LOG_PATH: /var/log/api/audit.log
+    volumes: [audit-logs:/var/log/api]
+    ports: ["8000:8000"]
+    mem_limit: 768m
+    restart: unless-stopped
+
+  # One-off data generator (same image as the API). Run with: make seed ROWS=2000000
+  seed:
+    build: ./api
+    profiles: ["tools"]
+    depends_on:
+      iceberg-rest: { condition: service_started }
+    environment:
+      <<: *s3-env
+      ICEBERG_REST_URI: http://iceberg-rest:8181
+      WAREHOUSE: s3://${WAREHOUSE_BUCKET:-warehouse}/
+      S3_ENDPOINT: http://minio:9000
+      TRINO_SCHEMA: payments
+      AUDIT_LOG_PATH: /tmp/audit.log
+    entrypoint: ["python", "-m", "seed.generate"]
+    mem_limit: 2g
+
+volumes:
+  minio-data:
+  catalog-data:
+  audit-logs:
