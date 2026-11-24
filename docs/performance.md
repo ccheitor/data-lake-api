@@ -86,3 +86,20 @@ Observations from that same note:
 - An earlier attempt limited the Trino container to 2 GB and left the image default heap (80% of RAM). Under load the container was OOM-killed and requests failed. Setting a 1.5 GB heap inside a 3 GB limit fixed it. Size the heap and the container limit together.
 
 Read those as an order-of-magnitude comparison on that VM: direct lookup about 4 requests/s, warm cache about 2,600 requests/s at a p95 of 5.2 ms, paginated scan about 38 requests/s. A quieter machine, a different row count, or k6 on another host will not reproduce the same figures. Run it and write the new row into `loadtest/RESULTS.md`.
+
+## Storage: files vs lake
+
+The same generator was also written out as the file formats a partner would still receive, and as Parquet / Iceberg. The full note (10 million row check, bytes a query actually reads, linear projections, S3 list-price sketch, and caveats) is [loadtest/STORAGE.md](../loadtest/STORAGE.md). Reproduce it from the repo root with `pip install -r loadtest/requirements.txt` and `python loadtest/storage_compare.py --rows 2000000 --rows-large 10000000`.
+
+Measured on 2026-11-24, 2,000,000 rows, 90 days, seed 42. Hardware in that note: shared 8-core Intel Xeon, 16 GiB RAM.
+
+| Format | Bytes | Size | Bytes/row | vs uncompressed CSV |
+|---|---:|---:|---:|---:|
+| CSV, uncompressed (UTF-8, header, Excel-style quoting) | 292,630,765 | 279.1 MiB | 146.32 | 1.000× |
+| Fixed-width / positional TXT (CNAB-style) | 554,505,021 | 528.8 MiB | 277.25 | 1.895× |
+| JSON Lines (one object per row; what a naive API would return) | 690,630,624 | 658.6 MiB | 345.32 | 2.360× |
+| CSV gziped at level 6 (GNU gzip default) | 65,139,015 | 62.12 MiB | 32.57 | 0.223× |
+| Iceberg table (zstd, day(ts) partitions, metadata included) | 67,355,337 | 64.24 MiB | 33.68 | 0.230× |
+| Single Parquet file (zstd, dictionary, statistics) | 37,867,262 | 36.11 MiB | 18.93 | 0.129× |
+
+The Iceberg figure includes metadata. Data files alone were 66,836,438 bytes across 720 Parquet files. A day-partitioned 7-day slice of those files was 5,180,671 bytes; the same 7 days limited to `customer_id` and `amount` was 754,415 bytes. Do not treat the 1-billion-row and 1 TiB projections in the note as measurements.

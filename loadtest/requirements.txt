@@ -1,0 +1,5 @@
+# Host-side dependencies for loadtest/storage_compare.py.
+# The API image does not install this file.
+-r ../api/requirements.txt
+duckdb==2.0.1
+pyiceberg[sql-sqlite]==0.12.0

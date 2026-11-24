@@ -10,12 +10,13 @@ Guides for the lakehouse data API. The [README](../README.md) is the short landi
 | [Configuration](configuration.md) | Environment variables, Compose settings, and Makefile targets |
 | [Data model](data-model.md) | Iceberg table, partitions, sort order, and the generator |
 | [Security](security.md) | API keys, masking, the audit log, and production gaps |
-| [Performance](performance.md) | Why TPS splits across two layers, how to load-test, measured results |
+| [Performance](performance.md) | Why TPS splits across two layers, how to load-test, measured results, file vs lake size |
 | [Deployment](deployment.md) | Laptop, Oracle Cloud Always Free, a small VPS, and an AWS sketch |
 | [Roadmap](roadmap.md) | What this demo leaves for a production system |
 
 Related files outside this folder:
 
 - [Load test results](../loadtest/RESULTS.md) — the numbers cited in the performance guide
+- [Storage comparison](../loadtest/STORAGE.md) — CSV, fixed-width, JSON, gzip, Parquet, and Iceberg sizes
 - [Oracle Cloud Always Free](oracle-cloud-free.md) — step-by-step for an Ampere A1 VM
 - [Contributing](../CONTRIBUTING.md)
