@@ -14,7 +14,7 @@ Data lives in three Docker volumes (`minio-data`, `catalog-data`, `audit-logs`).
 
 The stack fits a free Ampere A1 VM because every image has an arm64 build and the container limits sum to about 5.2 GB, under the 12 GB that current Always Free A1 capacity is described as. The walkthrough, the limits table, the idle-reclamation warning, and the option to point S3 at OCI Object Storage are in [oracle-cloud-free.md](oracle-cloud-free.md).
 
-Read that page before you size the VM. The free-tier CPU and RAM allowance has changed over time; the note in that guide is dated 2026-11-24 and tells you to re-check Oracle's Always Free page. Use `make loadtest-all` on the VM and append a row to [loadtest/RESULTS.md](../loadtest/RESULTS.md) rather than assuming the x86 numbers carry over.
+Read that page before you size the VM. The free-tier CPU and RAM allowance has changed over time; the note in that guide is dated 2026-11-24 and tells you to re-check Oracle's Always Free page. Use `make loadtest-all` on the VM and append a row to [loadtest/RESULTS.md](../../loadtest/RESULTS.md) rather than assuming the x86 numbers carry over.
 
 On that VM, do not leave 8080, 6379, 8181, or 9001 open to the internet. Set `S3_PUBLIC_ENDPOINT` to an address the downloader can reach if exports are fetched from outside.
 

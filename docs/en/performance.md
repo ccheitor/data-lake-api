@@ -1,6 +1,6 @@
 # Performance
 
-There is no single transactions-per-second number for this stack. A data API serves two different jobs, and they need different machinery. The figures below are the run recorded in [loadtest/RESULTS.md](../loadtest/RESULTS.md). They are not a benchmark of your laptop. The hardware is part of the result.
+There is no single transactions-per-second number for this stack. A data API serves two different jobs, and they need different machinery. The figures below are the run recorded in [loadtest/RESULTS.md](../../loadtest/RESULTS.md). They are not a benchmark of your laptop. The hardware is part of the result.
 
 ## Why the hot path is not Trino
 
@@ -55,11 +55,11 @@ locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 20 -
 
 `--tags direct` switches to `cache=false`. The file has no `page` task. `HOT_CUSTOMERS` and `API_KEY` are environment variables, defaulting to 1000 and `dev-analyst-key`.
 
-Record the machine, the row count, and the command next to any numbers you keep. The template at the bottom of [loadtest/RESULTS.md](../loadtest/RESULTS.md) is there for that. One 60-second pass is not a capacity curve. The results file says to repeat each scenario at least twice, and to raise `VUS` until p95 or errors move, if you want a knee.
+Record the machine, the row count, and the command next to any numbers you keep. The template at the bottom of [loadtest/RESULTS.md](../../loadtest/RESULTS.md) is there for that. One 60-second pass is not a capacity curve. The results file says to repeat each scenario at least twice, and to raise `VUS` until p95 or errors move, if you want a knee.
 
 ## Measured results
 
-The only measured run checked into the repo is **Run 1** in [loadtest/RESULTS.md](../loadtest/RESULTS.md), dated 2026-11-24.
+The only measured run checked into the repo is **Run 1** in [loadtest/RESULTS.md](../../loadtest/RESULTS.md), dated 2026-11-24.
 
 Conditions, copied from that file:
 
@@ -89,7 +89,7 @@ Read those as an order-of-magnitude comparison on that VM: direct lookup about 4
 
 ## Storage: files vs lake
 
-The same generator was also written out as the file formats a partner would still receive, and as Parquet / Iceberg. The full note (10 million row check, bytes a query actually reads, linear projections, S3 list-price sketch, and caveats) is [loadtest/STORAGE.md](../loadtest/STORAGE.md). Reproduce it from the repo root with `pip install -r loadtest/requirements.txt` and `python loadtest/storage_compare.py --rows 2000000 --rows-large 10000000`.
+The same generator was also written out as the file formats a partner would still receive, and as Parquet / Iceberg. The full note (10 million row check, bytes a query actually reads, linear projections, S3 list-price sketch, and caveats) is [loadtest/STORAGE.md](../../loadtest/STORAGE.md). Reproduce it from the repo root with `pip install -r loadtest/requirements.txt` and `python loadtest/storage_compare.py --rows 2000000 --rows-large 10000000`.
 
 Measured on 2026-11-24, 2,000,000 rows, 90 days, seed 42. Hardware in that note: shared 8-core Intel Xeon, 16 GiB RAM.
 
